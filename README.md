@@ -8,4 +8,4 @@ docker run -p 8888:8888 -p 6006:6006 -v host_folder:container_folder tensorflow/
 - -v host_folder:container_folder enables sharing a folder between the host and the container
 
 To run commands inside a container
-- docker exec -it <container ID> bash
+- docker exec -it \<container ID> bash
