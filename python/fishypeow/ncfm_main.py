@@ -82,7 +82,7 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
             EarlyStopping(monitor='val_loss', patience=3, verbose=0),
             ReduceLROnPlateau(monitor='val_loss', factor=0.8,
                               patience=2, min_lr=0.001),
-            CSVLogger('./logs/training_{}.log'.format(now.strftime("%Y-%m-%d-%H-%M")), separator=';', append=True),
+            CSVLogger('./logs/training_{}.log'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")), separator=';', append=True),
         ]
         if (data_augmentation):
             print('Using real-time data augmentation.')
