@@ -1,5 +1,6 @@
 # Our git ignore
 data/
+*.csv
 
 ## GITHUB IGNORE USING PYTHON :
 

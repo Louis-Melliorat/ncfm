@@ -8,12 +8,13 @@ import time
 
 import numpy as np # linear algebra
 import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+#from matplotlib import pyplot as plt
 
 # Input data files are available in the "../input/" directory.
 # For example, running this (by clicking run or pressing Shift+Enter) will list the files in the input directory
 
 from subprocess import check_output
-print(check_output(["ls", "data"]).decode("utf8"))
+print(check_output(["ls", "../../data"]).decode("utf8"))
 
 # Any results you write to the current directory are saved as output.
 
@@ -23,101 +24,14 @@ from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2D, AveragePooling2D
 from keras.optimizers import SGD, Adagrad
-from keras.callbacks import EarlyStopping
-from keras.utils import np_utils
-from sklearn.metrics import log_loss
+from keras.callbacks import EarlyStopping, CSVLogger, ReduceLROnPlateau
+from sklearn.metrics import log_loss, classification_report
 from keras import __version__ as keras_version
 from keras.preprocessing.image import ImageDataGenerator
 
-def get_im_cv2(path):
-    img = cv2.imread(path)
-    resized = cv2.resize(img, (48, 48))#, cv2.INTER_LINEAR)
-    return resized
-
-
-def load_train():
-    X_train = []
-    X_train_id = []
-    y_train = []
-    start_time = time.time()
-
-    print('Read train images')
-    folders = ['ALB', 'BET', 'DOL', 'LAG', 'NoF', 'OTHER', 'SHARK', 'YFT']
-    for fld in folders:
-        index = folders.index(fld)
-        print('Load folder {} (Index: {})'.format(fld, index))
-        path = os.path.join('.', 'data', 'train', fld, '*.jpg')
-        #os.listdir(path)
-        files = glob.glob(path)
-        for fl in files:
-            flbase = os.path.basename(fl)
-            img = get_im_cv2(fl)
-            X_train.append(img)
-            X_train_id.append(flbase)
-            y_train.append(index)
-
-    print('Read train data time: {} seconds'.format(round(time.time() - start_time, 2)))
-    return X_train, y_train, X_train_id
-
-
-def load_test():
-    path = os.path.join('.', 'data', 'test_stg1', '*.jpg')
-    files = sorted(glob.glob(path))
-
-    X_test = []
-    X_test_id = []
-    for fl in files:
-        flbase = os.path.basename(fl)
-        img = get_im_cv2(fl)
-        X_test.append(img)
-        X_test_id.append(flbase)
-
-    return X_test, X_test_id
-
-
-def create_submission(predictions, test_id, info):
-    result1 = pd.DataFrame(predictions, columns=['ALB', 'BET', 'DOL', 'LAG', 'NoF', 'OTHER', 'SHARK', 'YFT'])
-    result1.loc[:, 'image'] = pd.Series(test_id, index=result1.index)
-    now = datetime.datetime.now()
-    sub_file = 'submission_' + info + '_' + str(now.strftime("%Y-%m-%d-%H-%M")) + '.csv'
-    result1.to_csv(sub_file, index=False)
-
-
-def read_and_normalize_train_data():
-    train_data, train_target, train_id = load_train()
-
-    print('Convert to numpy...')
-    train_data = np.array(train_data, dtype=np.uint8)
-    train_target = np.array(train_target, dtype=np.uint8)
-
-    print('Reshape...')
-    train_data = train_data.transpose((0, 3, 1, 2))
-
-    print('Convert to float...')
-    train_data = train_data.astype('float32')
-    train_data = train_data / 255
-    train_target = np_utils.to_categorical(train_target, 8)
-
-    print('Train shape:', train_data.shape)
-    print(train_data.shape[0], 'train samples')
-    return train_data, train_target, train_id
-
-
-
-def read_and_normalize_test_data():
-    start_time = time.time()
-    test_data, test_id = load_test()
-
-    test_data = np.array(test_data, dtype=np.uint8)
-    test_data = test_data.transpose((0, 3, 1, 2))
-
-    test_data = test_data.astype('float32')
-    test_data = test_data / 255
-
-    print('Test shape:', test_data.shape)
-    print(test_data.shape[0], 'test samples')
-    print('Read and process test data time: {} seconds'.format(round(time.time() - start_time, 2)))
-    return test_data, test_id
+# application packaging
+from ncfm_model import create_model, evaluate_model, create_submission
+from ncfm_img_proc import read_and_normalize_train_data, read_and_normalize_test_data
 
 
 def dict_to_list(d):
@@ -134,48 +48,17 @@ def merge_several_folds_mean(data, nfolds):
     a /= nfolds
     return a.tolist()
 
-def create_model(learning_rate=5e-3, dec=1e-6, moment=0.898):
-    model = Sequential()
-    model.add(ZeroPadding2D((1, 1), input_shape=(3, 48, 48), dim_ordering='th'))
-    model.add(Convolution2D(4, 3, 3, activation='relu', dim_ordering='th',init='he_uniform'))
-    model.add(ZeroPadding2D((1, 1), dim_ordering='th'))
-    model.add(Convolution2D(4, 3, 3, activation='relu', dim_ordering='th',init='he_uniform'))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), dim_ordering='th'))
-
-    model.add(ZeroPadding2D((1, 1), dim_ordering='th'))
-    model.add(Convolution2D(8, 3, 3, activation='relu', dim_ordering='th',init='he_uniform'))
-    model.add(ZeroPadding2D((1, 1), dim_ordering='th'))
-    model.add(Convolution2D(8, 3, 3, activation='relu', dim_ordering='th',init='he_uniform'))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), dim_ordering='th'))
-
-    model.add(Flatten())
-    model.add(Dense(96, activation='relu',init='he_uniform'))
-    model.add(Dropout(0.515))
-    model.add(Dense(16, activation='relu',init='he_uniform'))
-    model.add(Dropout(0.515))
-    model.add(Dense(8, activation='softmax'))
-
-    sgd = SGD(lr=learning_rate, decay=dec, momentum=moment, nesterov=True)
-    model.compile(optimizer=sgd,loss='categorical_crossentropy')
-
-    return model
-
-
-def get_validation_predictions(train_data, predictions_valid):
-    pv = []
-    for i in range(len(train_data)):
-        pv.append(predictions_valid[i])
-    return pv
-
 
 def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
     # input image dimensions
-    batch_size = 32
-    nb_epoch = 50
+    batch_size = 24
+    nb_epoch = 60
     random_state = 51
     first_rl = 96
+    img_size=(96,96)
+    lr=1e-2
 
-    train_data, train_target, train_id = read_and_normalize_train_data()
+    train_data, train_target, train_id = read_and_normalize_train_data(img_size)
 
     yfull_train = dict()
     kf = KFold(len(train_id), n_folds=nfolds, shuffle=True, random_state=random_state)
@@ -184,7 +67,7 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
     models = []
     for train_index, test_index in kf:
         start_time_model_fitting = time.time()
-        model = create_model()
+        model = create_model(learning_rate=lr, dec=1e-6, moment=0.898, img_size=img_size)
         X_train = train_data[train_index]
         Y_train = train_target[train_index]
         X_valid = train_data[test_index]
@@ -197,6 +80,9 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
 
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=3, verbose=0),
+            ReduceLROnPlateau(monitor='val_loss', factor=0.8,
+                              patience=2, min_lr=0.001),
+            CSVLogger('./logs/training_{}.log'.format(now.strftime("%Y-%m-%d-%H-%M")), separator=';', append=True),
         ]
         if (data_augmentation):
             print('Using real-time data augmentation.')
@@ -206,7 +92,7 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
                         featurewise_std_normalization=False,  # divide inputs by std of the dataset
                         samplewise_std_normalization=False,  # divide each input by its std
                         zca_whitening=False,  # apply ZCA whitening
-                        rotation_range=30,  # randomly rotate images in the range (degrees, 0 to 180)
+                        rotation_range=20,  # randomly rotate images in the range (degrees, 0 to 180)
                         width_shift_range=0.05,  # randomly shift images horizontally (fraction of total width)
                         height_shift_range=0.05,  # randomly shift images vertically (fraction of total height)
                         horizontal_flip=True,  # randomly flip images
@@ -228,14 +114,17 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
                       batch_size=batch_size,
                       nb_epoch=nb_epoch,
                       shuffle=True,
-                      verbose=2,
+                      verbose=1,
                       validation_data=(X_valid, Y_valid),
                       callbacks=callbacks)
 
         predictions_valid = model.predict(X_valid.astype('float32'), batch_size=batch_size, verbose=2)
+
+
         score = log_loss(Y_valid, predictions_valid)
         print('Score log_loss: ', score)
         sum_score += score*len(test_index)
+        print(classification_report(Y_valid.argmax(1), predictions_valid.argmax(1)))
         print('Compute and fit model : {} seconds'.format(round(time.time() - start_time_model_fitting, 2)))
 
         # Store valid predictions
@@ -248,6 +137,8 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
     print("Log_loss train independent avg: ", score)
 
     info_string = 'loss_' + str(score) + '_folds_' + str(nfolds) + '_ep_' + str(nb_epoch) + '_fl_' + str(first_rl)
+    if (data_augmentation):
+            info_string+='_data_aug_'
     return info_string, models
 
 
@@ -272,11 +163,11 @@ def run_cross_validation_process_test(info_string, models):
     create_submission(test_res, test_id, info_string)
 
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
     #set seed
     np.random.seed(123)
     print('Keras version: {}'.format(keras_version))
     num_folds = 6
-    data_augmentation = False
+    data_augmentation = True
     info_string, models = run_cross_validation_create_models(num_folds, data_augmentation)
     run_cross_validation_process_test(info_string, models)
