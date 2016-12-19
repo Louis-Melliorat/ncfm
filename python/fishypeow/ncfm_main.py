@@ -14,7 +14,7 @@ import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 # For example, running this (by clicking run or pressing Shift+Enter) will list the files in the input directory
 
 from subprocess import check_output
-print(check_output(["ls", "../../data"]).decode("utf8"))
+#print(check_output(["ls", "../../data"]).decode("utf8"))
 
 # Any results you write to the current directory are saved as output.
 
@@ -51,7 +51,7 @@ def merge_several_folds_mean(data, nfolds):
 
 def run_cross_validation_create_models(nfolds=10, data_augmentation=True, img_size=(48,48)):
     # input image dimensions
-    batch_size = 24
+    batch_size = 48
     nb_epoch = 60
     random_state = 51
     first_rl = 96
@@ -91,9 +91,9 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True, img_si
                         featurewise_std_normalization=False,  # divide inputs by std of the dataset
                         samplewise_std_normalization=False,  # divide each input by its std
                         zca_whitening=False,  # apply ZCA whitening
-                        rotation_range=10,  # randomly rotate images in the range (degrees, 0 to 180)
-                        width_shift_range=0.02,  # randomly shift images horizontally (fraction of total width)
-                        height_shift_range=0.02,  # randomly shift images vertically (fraction of total height)
+                        rotation_range=25,  # randomly rotate images in the range (degrees, 0 to 180)
+                        width_shift_range=0.04,  # randomly shift images horizontally (fraction of total width)
+                        height_shift_range=0.04,  # randomly shift images vertically (fraction of total height)
                         horizontal_flip=True,  # randomly flip images
                         vertical_flip=True)  # randomly flip images
             # Compute quantities required for featurewise normalization
@@ -121,8 +121,8 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True, img_si
 
         score = evaluate_model(Y_valid, predictions_valid)
         sum_score += score*len(test_index)
-
-        print('Compute and fit model : {} seconds'.format(round(time.time() - start_time_model_fitting, 2)))
+        exec_time = str(datetime.timedelta(seconds=(round(time.time() - start_time_model_fitting,0)))).split('.')[0]
+        print('Compute and fit model time : {} '.format(exec_time))
 
         # Store valid predictions
         for i in range(len(test_index)):
@@ -140,7 +140,7 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True, img_si
 
 
 def run_cross_validation_process_test(info_string, models, img_size):
-    batch_size = 24
+    batch_size = 48
     num_fold = 0
     yfull_test = []
     test_id = []
@@ -162,10 +162,19 @@ def run_cross_validation_process_test(info_string, models, img_size):
 
 if __name__ == '__main__':
     #set seed
-    np.random.seed(1234)
+    myseed=1234
+    global_start = time.time()
+    np.random.seed(myseed)
+    print('*******************************************************************')
+    print('Starting job. Good luck with seed {}.'.format(seed))
+    print('*******************************************************************')
     print('Keras version: {}'.format(keras_version))
-    num_folds = 8
+    num_folds = 5
     data_augmentation = True
-    img_size=(96,96)
+    img_size=(70,70)
     info_string, models = run_cross_validation_create_models(num_folds, data_augmentation, img_size)
     run_cross_validation_process_test(info_string, models, img_size)
+    print('Submission file ready. See {}'.format(info_string))
+    tot_time = str(datetime.timedelta(seconds=(round(time.time() - global_start,0)))).split('.')[0]
+    print('Total execution time : {} '.format(tot_time))
+    print('*******************************************************************')
