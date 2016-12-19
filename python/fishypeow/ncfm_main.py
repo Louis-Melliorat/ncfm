@@ -49,13 +49,12 @@ def merge_several_folds_mean(data, nfolds):
     return a.tolist()
 
 
-def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
+def run_cross_validation_create_models(nfolds=10, data_augmentation=True, img_size=(48,48)):
     # input image dimensions
     batch_size = 24
     nb_epoch = 60
     random_state = 51
     first_rl = 96
-    img_size=(96,96)
     lr=1e-2
 
     train_data, train_target, train_id = read_and_normalize_train_data(img_size)
@@ -79,9 +78,9 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
         print('Split valid: ', len(X_valid), len(Y_valid))
 
         callbacks = [
-            EarlyStopping(monitor='val_loss', patience=3, verbose=0),
-            ReduceLROnPlateau(monitor='val_loss', factor=0.8,
-                              patience=2, min_lr=0.001),
+            EarlyStopping(monitor='val_loss', patience=3, verbose=1),
+            ReduceLROnPlateau(monitor='val_loss', factor=0.85,
+                             patience=2, min_lr=0.001),
             CSVLogger('./logs/training_{}.log'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")), separator=';', append=True),
         ]
         if (data_augmentation):
@@ -92,9 +91,9 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
                         featurewise_std_normalization=False,  # divide inputs by std of the dataset
                         samplewise_std_normalization=False,  # divide each input by its std
                         zca_whitening=False,  # apply ZCA whitening
-                        rotation_range=20,  # randomly rotate images in the range (degrees, 0 to 180)
-                        width_shift_range=0.05,  # randomly shift images horizontally (fraction of total width)
-                        height_shift_range=0.05,  # randomly shift images vertically (fraction of total height)
+                        rotation_range=10,  # randomly rotate images in the range (degrees, 0 to 180)
+                        width_shift_range=0.02,  # randomly shift images horizontally (fraction of total width)
+                        height_shift_range=0.02,  # randomly shift images vertically (fraction of total height)
                         horizontal_flip=True,  # randomly flip images
                         vertical_flip=True)  # randomly flip images
             # Compute quantities required for featurewise normalization
@@ -120,11 +119,9 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
 
         predictions_valid = model.predict(X_valid.astype('float32'), batch_size=batch_size, verbose=2)
 
-
-        score = log_loss(Y_valid, predictions_valid)
-        print('Score log_loss: ', score)
+        score = evaluate_model(Y_valid, predictions_valid)
         sum_score += score*len(test_index)
-        print(classification_report(Y_valid.argmax(1), predictions_valid.argmax(1)))
+
         print('Compute and fit model : {} seconds'.format(round(time.time() - start_time_model_fitting, 2)))
 
         # Store valid predictions
@@ -142,7 +139,7 @@ def run_cross_validation_create_models(nfolds=10, data_augmentation=True):
     return info_string, models
 
 
-def run_cross_validation_process_test(info_string, models):
+def run_cross_validation_process_test(info_string, models, img_size):
     batch_size = 24
     num_fold = 0
     yfull_test = []
@@ -153,7 +150,7 @@ def run_cross_validation_process_test(info_string, models):
         model = models[i]
         num_fold += 1
         print('Start KFold number {} from {}'.format(num_fold, nfolds))
-        test_data, test_id = read_and_normalize_test_data()
+        test_data, test_id = read_and_normalize_test_data(img_size)
         test_prediction = model.predict(test_data, batch_size=batch_size, verbose=2)
         yfull_test.append(test_prediction)
 
@@ -165,9 +162,10 @@ def run_cross_validation_process_test(info_string, models):
 
 if __name__ == '__main__':
     #set seed
-    np.random.seed(123)
+    np.random.seed(1234)
     print('Keras version: {}'.format(keras_version))
-    num_folds = 6
+    num_folds = 8
     data_augmentation = True
-    info_string, models = run_cross_validation_create_models(num_folds, data_augmentation)
-    run_cross_validation_process_test(info_string, models)
+    img_size=(96,96)
+    info_string, models = run_cross_validation_create_models(num_folds, data_augmentation, img_size)
+    run_cross_validation_process_test(info_string, models, img_size)

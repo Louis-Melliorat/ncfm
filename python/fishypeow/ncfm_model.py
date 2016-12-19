@@ -6,9 +6,11 @@ from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2
 from keras.optimizers import SGD, Adagrad
 from keras.callbacks import EarlyStopping, CSVLogger, ReduceLROnPlateau
 from keras.utils import np_utils
-from sklearn.metrics import log_loss, classification_report
+from sklearn.metrics import log_loss, classification_report, confusion_matrix
 from keras import __version__ as keras_version
 from keras.preprocessing.image import ImageDataGenerator
+import pandas as pd
+import datetime
 
 def create_model(learning_rate=1e-2, dec=1e-6, moment=0.898, img_size=(48, 48)):
     model = Sequential()
@@ -36,16 +38,19 @@ def create_model(learning_rate=1e-2, dec=1e-6, moment=0.898, img_size=(48, 48)):
 
     return model
 
-def evaluate_model():
-    '''
-    TODO
-    '''
+def evaluate_model(Y_valid, predictions_valid):
+    score = log_loss(Y_valid, predictions_valid)
+    print('Score log_loss: ', score)
+    folders = ['ALB', 'BET', 'DOL', 'LAG', 'NoF', 'OTHER', 'SHARK', 'YFT']
+    print('Classification report and confusion matrix')
+    print(classification_report(Y_valid.argmax(1), predictions_valid.argmax(1), target_names=folders))
+    print(confusion_matrix(Y_valid.argmax(1), predictions_valid.argmax(1)))
+    return score
 
 
 
 def create_submission(predictions, test_id, info):
     result1 = pd.DataFrame(predictions, columns=['ALB', 'BET', 'DOL', 'LAG', 'NoF', 'OTHER', 'SHARK', 'YFT'])
     result1.loc[:, 'image'] = pd.Series(test_id, index=result1.index)
-    now = datetime.datetime.now()
-    sub_file = 'submission_' + info + '_' + str(now.strftime("%Y-%m-%d-%H-%M")) + '.csv'
+    sub_file = 'submission_' + info + '_' + str(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")) + '.csv'
     result1.to_csv(sub_file, index=False)
